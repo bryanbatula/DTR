@@ -440,7 +440,7 @@ export default function Attendance() {
                   <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
                     <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-3">Pay Breakdown</p>
                     {[
-                      { label: 'Regular Pay',          value: fmtPHP(calc.regular_pay),         color: 'text-green-700' },
+                      { label: `Regular Pay (${calc.regular_rate_label ?? '100%'})`, value: fmtPHP(calc.regular_pay), color: 'text-green-700' },
                       { label: `OT Pay (${calc.ot_rate_label})`, value: calc.overtime_pay > 0 ? fmtPHP(calc.overtime_pay) : '—', color: 'text-purple-700' },
                       { label: 'Night Diff Pay (+10%)', value: calc.night_diff_pay > 0 ? fmtPHP(calc.night_diff_pay) : '—', color: 'text-indigo-700' },
                       { label: 'Late Deduction',        value: calc.late_deduction > 0 ? `−${fmtPHP(calc.late_deduction)}` : '—', color: 'text-red-600' },

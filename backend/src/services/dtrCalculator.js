@@ -6,7 +6,9 @@
  * Legal References:
  *  Art. 83 — Normal hours of work: 8 hours/day
  *  Art. 86 — Night-shift differential: +10% for 10 PM – 6 AM
- *  Art. 87 — Overtime: +25% regular day, +30% rest/special holiday, +100% regular holiday
+ *  Art. 87 — Overtime: +25% regular day OT (125% of basic rate)
+ *  Art. 93 — Rest day: 130% regular pay; OT = 130% × 130% = 169% of basic rate
+ *  Art. 94 — Regular holiday: 200% regular pay; OT = 200% × 130% = 260% of basic rate
  *  Art. 88 — Undertime NOT offset by overtime (tardiness ≠ OT credit)
  *  Art. 93 — Rest day overtime: 130% rate
  *  Book III, Rule IV, Sec. 4 — Meal period: minimum 60 minutes, unpaid
@@ -24,12 +26,29 @@ const NIGHT_DIFF = {
   END_MINS:   6 * 60,  // 06:00 = 360 min (next day boundary)
 };
 
-/** OT bonus rates added on top of the base hourly rate */
-const OT_BONUS_RATES = {
-  regular:         0.25, // Article 87  → 125%
-  rest_day:        0.30, // Article 93  → 130%
-  special_holiday: 0.30, //               130%
-  regular_holiday: 1.00, // Double pay  → 200%
+/**
+ * Regular-hours pay multiplier (applied to basic hourly rate).
+ * Even within 8 hours, rest days and holidays require higher base pay.
+ */
+const REGULAR_PAY_MULTIPLIERS = {
+  regular:         1.00, // 100% — Art. 83
+  rest_day:        1.30, // 130% — Art. 93
+  special_holiday: 1.30, // 130% — Rule IV, Sec. 6
+  regular_holiday: 2.00, // 200% double pay — Art. 94
+};
+
+/**
+ * OT total multiplier (applied to basic hourly rate).
+ * Formula: regular_pay_rate × 1.30 OT premium
+ *   Regular day  → 1.00 × 1.25 = 1.25  (Art. 87)
+ *   Rest/Spl.Hol → 1.30 × 1.30 = 1.69  (Art. 93)
+ *   Reg. Holiday → 2.00 × 1.30 = 2.60  (Art. 94)
+ */
+const OT_MULTIPLIERS = {
+  regular:         1.25,
+  rest_day:        1.69,
+  special_holiday: 1.69,
+  regular_holiday: 2.60,
 };
 
 const NIGHT_DIFF_RATE = 0.10; // Article 86 → +10%
@@ -152,15 +171,20 @@ function calculateDTR({
   }
 
   // ── Pay Computation ────────────────────────────────────────
-  const hr           = parseFloat(hourly_rate) || 0;
-  const otBonus      = OT_BONUS_RATES[day_type] ?? OT_BONUS_RATES.regular;
-  const regularHours = Math.min(totalRenderedMins, SCHEDULE.REGULAR_WORK_MINS) / 60;
-  const otHours      = otMinutes / 60;
-  const ndHours      = nightDiffMins / 60;
+  const hr              = parseFloat(hourly_rate) || 0;
+  const regMultiplier   = REGULAR_PAY_MULTIPLIERS[day_type] ?? 1.00;
+  const otMultiplier    = OT_MULTIPLIERS[day_type]           ?? 1.25;
+  const regularHours    = Math.min(totalRenderedMins, SCHEDULE.REGULAR_WORK_MINS) / 60;
+  const otHours         = otMinutes / 60;
+  const ndHours         = nightDiffMins / 60;
 
-  const regularPay         = regularHours * hr;
-  const overtimePay        = otHours * hr * (1 + otBonus);
+  // Regular pay: hourly_rate × day_type_multiplier × hours worked (max 8)
+  const regularPay         = regularHours * hr * regMultiplier;
+  // OT pay: hourly_rate × OT_multiplier (already includes day type premium)
+  const overtimePay        = otHours * hr * otMultiplier;
+  // Night diff: +10% of basic hourly rate for each ND hour
   const nightDiffPay       = ndHours * hr * NIGHT_DIFF_RATE;
+  // Deductions use basic hourly rate (Art. 88 — no day-type premium on deductions)
   const lateDeduction      = (lateMinutes / 60) * hr;
   const undertimeDeduction = (undertimeMinutes / 60) * hr;
   const grossPay           = regularPay + overtimePay + nightDiffPay - lateDeduction - undertimeDeduction;
@@ -186,7 +210,8 @@ function calculateDTR({
     gross_pay:            r2(grossPay),
     // Meta
     day_type,
-    ot_rate_label: `${Math.round((1 + otBonus) * 100)}%`,
+    regular_rate_label: `${Math.round(regMultiplier * 100)}%`,
+    ot_rate_label:      `${Math.round(otMultiplier * 100)}%`,
   };
 }
 
